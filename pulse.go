@@ -5,7 +5,9 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/hashicorp/go-cleanhttp"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
@@ -52,4 +54,42 @@ func (c *Client) setBaseURL(uri string) error {
 
 	c.baseUrl = baseUrl
 	return nil
+}
+
+func NewClient(token string, options ...ClientOptionFunc) (*Client, error) {
+	c, err := newClient(options...)
+	if err != nil {
+		return nil, err
+	}
+	c.token = token
+	return c, nil
+}
+
+func (c *Client) BaseURL() *url.URL {
+	u := *c.baseUrl
+	return &u
+}
+
+func newClient(options ...ClientOptionFunc) (*Client, error) {
+	c := &Client{}
+	c.client = &retryablehttp.Client{
+		ErrorHandler: retryablehttp.PassthroughErrorHandler,
+		HTTPClient:   cleanhttp.DefaultPooledClient(),
+		RetryWaitMin: 100 * time.Millisecond,
+		RetryWaitMax: 400 * time.Millisecond,
+		RetryMax:     5,
+	}
+
+	c.setBaseURL(defaultBaseURL)
+
+	for _, fn := range options {
+		if fn == nil {
+			continue
+		}
+		if err := fn(c); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
 }
